@@ -1,0 +1,35 @@
+# cargo-deny configuration: https://embarkstudios.github.io/cargo-deny/
+# Run locally with `cargo deny --all-features check`.
+
+[graph]
+all-features = true
+
+[advisories]
+# Every RustSec advisory (vulnerability, unmaintained, unsound, yanked)
+# fails the check unless listed here with a reason.
+ignore = []
+
+[licenses]
+# Permissive licenses compatible with distributing gexkit under
+# MIT OR Apache-2.0. Add one only after reading it.
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+]
+confidence-threshold = 0.93
+
+[licenses.private]
+# Workspace crates that are never published (publish = false) are exempt.
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

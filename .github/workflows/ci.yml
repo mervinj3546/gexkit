@@ -68,6 +68,25 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo +1.88.0 test --workspace --all-features
 
+  # Licenses, RustSec advisories, banned crates and sources; see deny.toml.
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features
+
+  # gex-core must stay publishable: metadata, packaged files, clean build.
+  publish-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo publish --dry-run -p gex-core
+
   bench-compile:
     runs-on: ubuntu-latest
     steps:
