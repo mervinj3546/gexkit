@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc bd4b72219bbb4270294df5e039d6a6e0824266d2c586600ceeeb0c3303c61b89 # shrinks to i = BsmInput { kind: Call, spot: 50.0, strike: 49.28092805234159, t: 0.02, rate: 0.0, div_yield: 0.0, sigma: 0.05 }
