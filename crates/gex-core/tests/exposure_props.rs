@@ -1,8 +1,8 @@
 //! Property tests for the exposure engine and levels on random chains.
 
 use gex_core::{
-    Chain, ExposureConfig, ExposureReport, OptionContract, OptionKind, STRIKE_TOLERANCE, analyze,
-    expected_move, max_pain, negligible_gex, per_strike, total_gex_at,
+    Chain, ExposureConfig, ExposureReport, GexError, OptionContract, OptionKind, STRIKE_TOLERANCE,
+    analyze, analyze_expiry, expected_move, max_pain, negligible_gex, per_strike, total_gex_at,
 };
 use proptest::prelude::*;
 
@@ -239,6 +239,31 @@ proptest! {
             }
             prop_assert_eq!(r1.walls, rk.walls);
         }
+    }
+
+    #[test]
+    fn per_expiry_reports_add_up(ch in chain()) {
+        let cfg = ExposureConfig::default();
+        let Some(all) = report(&ch) else { return Ok(()) };
+        let mut sum = [0.0; 4];
+        let mut skipped = 0;
+        for e in ch.expiries() {
+            match analyze_expiry(&ch, e, &cfg) {
+                Ok(r) => {
+                    for (s, t) in sum.iter_mut().zip(totals(&r)) {
+                        *s += t;
+                    }
+                    skipped += r.skipped;
+                }
+                // An expiry whose contracts all lack IV contributes nothing.
+                Err(GexError::NoUsableContracts { skipped: n }) => skipped += n,
+                Err(other) => prop_assert!(false, "{other}"),
+            }
+        }
+        for ((s, t), scale) in sum.into_iter().zip(totals(&all)).zip(abs_totals(&ch)) {
+            prop_assert!(sum_close(s, t, scale), "{s} vs {t} (scale {scale})");
+        }
+        prop_assert_eq!(skipped, all.skipped);
     }
 
     #[test]

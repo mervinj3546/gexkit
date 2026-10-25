@@ -206,6 +206,21 @@ pub fn analyze(chain: &Chain, cfg: &ExposureConfig) -> Result<ExposureReport> {
     })
 }
 
+/// [`analyze`] restricted to one expiry group: the contracts
+/// [`Chain::filter_expiry`] selects for `expiry`.
+///
+/// Totals and per-strike exposures of the expiry groups add up to the
+/// all-expiry report's; the flip, walls and regime do not, because they are
+/// not sums.
+///
+/// # Errors
+///
+/// Returns [`GexError::ExpiryNotFound`] if no contract is in that group,
+/// otherwise as [`analyze`].
+pub fn analyze_expiry(chain: &Chain, expiry: f64, cfg: &ExposureConfig) -> Result<ExposureReport> {
+    analyze(&chain.filter_expiry(expiry)?, cfg)
+}
+
 /// Per-strike exposure at the chain's spot, in ascending strike order. Does
 /// not validate `cfg`; [`analyze`] does.
 #[must_use]
@@ -621,6 +636,50 @@ mod tests {
         assert_eq!(em.strike, 450.0);
         let mp = crate::levels::max_pain(&chain, 0.1).unwrap();
         assert!(mp == 450.0 || mp == 450.001, "{mp}");
+    }
+
+    #[test]
+    fn per_expiry_totals_add_up_to_the_whole_chain() {
+        let chain = Chain::new(
+            100.0,
+            0.03,
+            0.01,
+            vec![
+                contract(OptionKind::Put, 95.0, 0.002, 0.3, 500),
+                contract(OptionKind::Call, 105.0, 0.002, 0.25, 700),
+                contract(OptionKind::Call, 100.0, 0.05, 0.2, 300),
+                contract(OptionKind::Put, 100.0, 0.05, 0.0, 900),
+                contract(OptionKind::Put, 90.0, 0.25, 0.28, 400),
+            ],
+        )
+        .unwrap();
+        let cfg = ExposureConfig::default();
+        let all = analyze(&chain, &cfg).unwrap();
+        let parts: Vec<ExposureReport> = chain
+            .expiries()
+            .into_iter()
+            .map(|e| analyze_expiry(&chain, e, &cfg).unwrap())
+            .collect();
+        assert_eq!(parts.len(), 3);
+        for (i, total) in totals(&all).into_iter().enumerate() {
+            let sum: f64 = parts.iter().map(|p| totals(p)[i]).sum();
+            let scale: f64 = parts.iter().map(|p| totals(p)[i].abs()).sum();
+            assert!(
+                (sum - total).abs() <= 1e-12 * scale,
+                "total {i}: {sum} vs {total}"
+            );
+        }
+        assert_eq!(parts.iter().map(|p| p.skipped).sum::<usize>(), all.skipped);
+        assert_eq!(
+            analyze_expiry(&chain, 0.5, &cfg),
+            Err(GexError::ExpiryNotFound(0.5))
+        );
+        let filtered = chain.filter_expiry(0.05).unwrap();
+        assert_eq!(filtered.contracts().len(), 2);
+        assert_eq!(
+            (filtered.spot(), filtered.rate(), filtered.multiplier()),
+            (100.0, 0.03, 100.0)
+        );
     }
 
     #[test]

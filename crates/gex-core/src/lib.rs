@@ -34,7 +34,7 @@ pub use bsm::{BsmInput, Greeks};
 pub use error::{GexError, Result};
 pub use exposure::{
     ExposureConfig, ExposureReport, NEGLIGIBLE_GEX_FRACTION, Regime, SpotGrid, StrikeExposure,
-    ZeroGamma, analyze, negligible_gex, per_strike, total_gex_at, zero_gamma,
+    ZeroGamma, analyze, analyze_expiry, negligible_gex, per_strike, total_gex_at, zero_gamma,
 };
 pub use levels::{ExpectedMove, PriceSource, Walls, expected_move, max_pain, walls};
 pub use math::{erfc, norm_cdf, norm_pdf};

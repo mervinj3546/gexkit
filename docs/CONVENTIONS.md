@@ -90,6 +90,18 @@ Each contract contributes `w = sign · OI · multiplier` times a greek:
   field before summing or picking, so results are bit-identical whatever
   the input order.
 
+## Per-expiry analysis
+
+`analyze` sums every expiry in the chain. For a question about one expiry
+(for example "0DTE GEX"), `Chain::filter_expiry(e)` returns a chain holding
+only the expiry group `e` falls in (see **Expiry groups** above; it returns
+`GexError::ExpiryNotFound` when that group is empty), and
+`analyze_expiry(chain, e, cfg)` is `analyze` on that chain. Because the
+expiry groups partition the chain, the per-expiry totals (GEX, DEX, vanna,
+charm), per-strike rows and `skipped` counts add up to the all-expiry
+report's. The flip, walls and regime are not sums, so a per-expiry flip is
+not a piece of the all-expiry flip.
+
 ## Regime
 
 `total_gex.abs() <= neutral_band` gives `Neutral` (the default band is 0).

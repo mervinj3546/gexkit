@@ -335,6 +335,27 @@ impl Chain {
             .filter(move |c| bounds.is_some_and(|(start, end)| start <= c.expiry && c.expiry < end))
     }
 
+    /// A chain holding only the expiry group `expiry` falls in (see
+    /// [`Chain::contracts_expiring`]), with the same spot, rate, dividend
+    /// yield and multiplier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GexError::ExpiryNotFound`] if no contract is in that group.
+    pub fn filter_expiry(&self, expiry: f64) -> Result<Chain> {
+        let contracts: Vec<OptionContract> = self.contracts_expiring(expiry).cloned().collect();
+        if contracts.is_empty() {
+            return Err(GexError::ExpiryNotFound(expiry));
+        }
+        Ok(Chain {
+            spot: self.spot,
+            rate: self.rate,
+            div_yield: self.div_yield,
+            multiplier: self.multiplier,
+            contracts,
+        })
+    }
+
     /// `[start, end)` of the expiry group `expiry` falls in: `start` is the
     /// group's representative and `end` the next group's (or infinity).
     fn expiry_group(&self, expiry: f64) -> Option<(f64, f64)> {
