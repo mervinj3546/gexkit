@@ -239,8 +239,14 @@ def expected_move(chain, e):
 
 
 def canonical(c):
-    """Same key as the Rust canonical order; reversed sorts keep the first."""
-    return (c["strike"], c["kind"] == "put", c["expiry"], c["iv"], c["open_interest"])
+    """Same key as the Rust canonical order (a missing quote sorts first);
+    reversed sorts keep the first."""
+
+    def quote(x):
+        return (0, 0.0) if x is None else (1, x)
+
+    return (c["strike"], c["kind"] == "put", c["expiry"], c["iv"], c["open_interest"],
+            c.get("volume", 0), quote(c["bid"]), quote(c["ask"]))
 
 
 def analyze(chain):

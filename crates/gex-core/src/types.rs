@@ -165,16 +165,24 @@ impl OptionContract {
         }
     }
 
-    /// Canonical order (strike, kind, expiry, iv, open interest) used before
-    /// summing, so results do not depend on input order. Contracts equal
-    /// under it contribute identically to every exposure.
+    /// Canonical order over every field (strike, kind, expiry, iv, open
+    /// interest, volume, bid, ask; a missing quote sorts first), used before
+    /// summing or picking a listing so results do not depend on input order.
+    /// Contracts equal under it are identical.
     pub(crate) fn canonical_cmp(a: &Self, b: &Self) -> std::cmp::Ordering {
+        let quote = |x: Option<f64>, y: Option<f64>| match (x, y) {
+            (Some(x), Some(y)) => x.total_cmp(&y),
+            _ => x.is_some().cmp(&y.is_some()),
+        };
         a.strike
             .total_cmp(&b.strike)
             .then(a.kind.cmp(&b.kind))
             .then(a.expiry.total_cmp(&b.expiry))
             .then(a.iv.total_cmp(&b.iv))
             .then(a.open_interest.cmp(&b.open_interest))
+            .then(a.volume.cmp(&b.volume))
+            .then(quote(a.bid, b.bid))
+            .then(quote(a.ask, b.ask))
     }
 }
 
