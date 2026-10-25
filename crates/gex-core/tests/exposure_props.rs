@@ -50,6 +50,40 @@ fn chain() -> impl Strategy<Value = Chain> {
     chain_and_shuffled().prop_map(|(c, _)| c)
 }
 
+/// Chains aimed at the flip search's hard cases: one shared expiry, often
+/// minutes away (so GEX underflows to 0 between strikes), and calls-only,
+/// puts-only or mixed contracts spread across the grid.
+fn flip_chain() -> impl Strategy<Value = Chain> {
+    let minutes = 1.0 / (365.0 * 1440.0);
+    let expiry = prop_oneof![
+        (1.0..240.0_f64).prop_map(move |m| m * minutes),
+        (1.0..30.0_f64).prop_map(|d| d * DAY),
+    ];
+    let kinds = prop_oneof![
+        Just(vec![OptionKind::Call]),
+        Just(vec![OptionKind::Put]),
+        Just(vec![OptionKind::Call, OptionKind::Put]),
+    ];
+    (50.0..500.0_f64, expiry, kinds).prop_flat_map(|(spot, expiry, kinds)| {
+        let leg = (
+            prop::sample::select(kinds),
+            0.85..1.15_f64,
+            0.05..0.8_f64,
+            prop_oneof![1 => Just(0_u64), 9 => 1..100_000_u64],
+        );
+        prop::collection::vec(leg, 1..12).prop_map(move |legs| {
+            let cs = legs
+                .into_iter()
+                .map(|(kind, m, iv, oi)| {
+                    OptionContract::new(kind, (spot * m * 2.0).round() / 2.0, expiry, iv, oi)
+                        .expect("valid")
+                })
+                .collect();
+            Chain::new(spot, 0.03, 0.01, cs).expect("valid")
+        })
+    })
+}
+
 fn report(chain: &Chain) -> Option<ExposureReport> {
     analyze(chain, &ExposureConfig::default()).ok()
 }
@@ -150,7 +184,7 @@ proptest! {
     }
 
     #[test]
-    fn zero_gamma_crossings_match_grid_sign_changes(ch in chain()) {
+    fn zero_gamma_crossings_match_grid_sign_changes(ch in prop_oneof![chain(), flip_chain()]) {
         // Sweep the grid independently of zero_gamma and keep only values
         // above the negligible threshold. Each sign alternation among them is
         // exactly one crossing, lying between the alternation's grid points;
