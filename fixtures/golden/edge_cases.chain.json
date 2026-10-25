@@ -1,0 +1,128 @@
+{
+  "spot": 100.2,
+  "rate": 0.04,
+  "div_yield": 0.01,
+  "multiplier": 100.0,
+  "contracts": [
+    {
+      "kind": "call",
+      "strike": 100.0,
+      "expiry": 0.0,
+      "iv": 0.25,
+      "open_interest": 500,
+      "volume": 0,
+      "bid": null,
+      "ask": null
+    },
+    {
+      "kind": "put",
+      "strike": 100.0,
+      "expiry": 0.0,
+      "iv": 0.25,
+      "open_interest": 400,
+      "volume": 0,
+      "bid": null,
+      "ask": null
+    },
+    {
+      "kind": "call",
+      "strike": 100.0,
+      "expiry": 0.005479452054794521,
+      "iv": 0.0,
+      "open_interest": 300,
+      "volume": 0,
+      "bid": null,
+      "ask": null
+    },
+    {
+      "kind": "put",
+      "strike": 100.0,
+      "expiry": 0.005479452054794521,
+      "iv": 0.3,
+      "open_interest": 300,
+      "volume": 0,
+      "bid": 1.1,
+      "ask": 1.3
+    },
+    {
+      "kind": "call",
+      "strike": 100.0,
+      "expiry": 0.005479452054794521,
+      "iv": 0.3,
+      "open_interest": 0,
+      "volume": 0,
+      "bid": 1.4,
+      "ask": null
+    },
+    {
+      "kind": "call",
+      "strike": 1.0,
+      "expiry": 0.005479452054794521,
+      "iv": 0.8,
+      "open_interest": 50,
+      "volume": 0,
+      "bid": null,
+      "ask": null
+    },
+    {
+      "kind": "put",
+      "strike": 1.0,
+      "expiry": 0.005479452054794521,
+      "iv": 0.8,
+      "open_interest": 50,
+      "volume": 0,
+      "bid": null,
+      "ask": null
+    },
+    {
+      "kind": "call",
+      "strike": 500.0,
+      "expiry": 0.005479452054794521,
+      "iv": 0.9,
+      "open_interest": 50,
+      "volume": 0,
+      "bid": null,
+      "ask": null
+    },
+    {
+      "kind": "put",
+      "strike": 500.0,
+      "expiry": 0.005479452054794521,
+      "iv": 0.9,
+      "open_interest": 50,
+      "volume": 0,
+      "bid": 399.0,
+      "ask": 401.0
+    },
+    {
+      "kind": "call",
+      "strike": 99.5,
+      "expiry": 1e-9,
+      "iv": 0.2,
+      "open_interest": 1000,
+      "volume": 0,
+      "bid": null,
+      "ask": null
+    },
+    {
+      "kind": "put",
+      "strike": 100.5,
+      "expiry": 1e-9,
+      "iv": 0.2,
+      "open_interest": 1000,
+      "volume": 0,
+      "bid": null,
+      "ask": null
+    },
+    {
+      "kind": "call",
+      "strike": 103.0,
+      "expiry": 0.005479452054794521,
+      "iv": 0.28,
+      "open_interest": 250,
+      "volume": 17,
+      "bid": null,
+      "ask": null
+    }
+  ]
+}

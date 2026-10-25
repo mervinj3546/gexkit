@@ -1,0 +1,20 @@
+[package]
+name = "gex-fixtures"
+description = "Deterministic synthetic option chains for gexkit tests and benches"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "gen"
+path = "src/main.rs"
+
+[dependencies]
+gex-core = { workspace = true, features = ["serde"] }
+serde_json.workspace = true
+
+[lints]
+workspace = true
