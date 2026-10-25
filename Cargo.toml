@@ -11,6 +11,9 @@ repository = "https://github.com/mervinj3546/gexkit"
 
 [workspace.dependencies]
 gex-core = { path = "crates/gex-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
