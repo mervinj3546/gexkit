@@ -59,6 +59,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --all-features
 
+  # rust-version in Cargo.toml; the oldest toolchain the workspace supports.
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup toolchain install 1.88.0 --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +1.88.0 test --workspace --all-features
+
   bench-compile:
     runs-on: ubuntu-latest
     steps:
