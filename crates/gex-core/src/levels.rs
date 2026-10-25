@@ -118,7 +118,7 @@ pub fn expected_move(chain: &Chain, expiry: f64) -> Result<ExpectedMove> {
         .filter_map(|group| {
             let first = |kind| group.iter().copied().find(|c| c.kind() == kind);
             Some((
-                group[0].strike(),
+                group.first()?.strike(),
                 first(OptionKind::Call)?,
                 first(OptionKind::Put)?,
             ))

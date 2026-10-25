@@ -247,7 +247,7 @@ impl<'a> Prepared<'a> {
     pub(crate) fn new(chain: &'a Chain) -> Self {
         let mut all: Vec<&OptionContract> = chain.contracts().iter().collect();
         all.sort_by(|a, b| OptionContract::canonical_cmp(a, b));
-        let usable: Vec<_> = all.iter().copied().filter(|c| c.iv() > 0.0).collect();
+        let usable: Vec<_> = all.iter().copied().filter(|c| is_usable(c)).collect();
         Self {
             skipped: all.len() - usable.len(),
             usable,
@@ -274,30 +274,33 @@ fn per_strike_prepared(
     prep: &Prepared<'_>,
     cfg: &ExposureConfig,
 ) -> Vec<StrikeExposure> {
+    // `all` is in canonical order, so each strike's contracts are adjacent.
+    prep.all
+        .chunk_by(|a, b| same_strike(a.strike(), b.strike()))
+        .filter_map(|group| strike_row(chain, group, cfg))
+        .collect()
+}
+
+/// Sums one strike's contracts into a row; `None` only for an empty group,
+/// which `chunk_by` never produces.
+fn strike_row(
+    chain: &Chain,
+    group: &[&OptionContract],
+    cfg: &ExposureConfig,
+) -> Option<StrikeExposure> {
     let spot = chain.spot();
-    let mut out: Vec<StrikeExposure> = Vec::new();
-    let mut usable = prep.usable.iter().peekable();
-    for c in &prep.all {
-        let row = match out.last_mut() {
-            #[allow(clippy::float_cmp)] // grouping identical strikes, not comparing results
-            Some(row) if row.strike == c.strike() => row,
-            _ => {
-                out.push(StrikeExposure {
-                    strike: c.strike(),
-                    ..StrikeExposure::default()
-                });
-                out.last_mut().expect("just pushed")
-            }
-        };
+    let mut row = StrikeExposure {
+        strike: group.first()?.strike(),
+        ..StrikeExposure::default()
+    };
+    for c in group {
         match c.kind() {
             OptionKind::Call => row.call_oi += c.open_interest(),
             OptionKind::Put => row.put_oi += c.open_interest(),
         }
-        // `usable` is a subsequence of `all` in the same order.
-        if !usable.peek().is_some_and(|u| std::ptr::eq(**u, *c)) {
+        if !is_usable(c) {
             continue;
         }
-        usable.next();
         let w = weight(chain, c, cfg);
         let g = bsm::greeks(&input(chain, c, spot, cfg));
         let gex = w * g.gamma * spot * spot * PER_PCT;
@@ -310,7 +313,17 @@ fn per_strike_prepared(
         row.vanna += w * g.vanna * spot * PER_PCT;
         row.charm += w * g.charm * spot / DAYS_PER_YEAR;
     }
-    out
+    Some(row)
+}
+
+/// Whether two strikes share a per-strike row.
+fn same_strike(a: f64, b: f64) -> bool {
+    a.total_cmp(&b).is_eq()
+}
+
+/// Contracts the engine can price: those with a positive IV.
+fn is_usable(c: &OptionContract) -> bool {
+    c.iv() > 0.0
 }
 
 /// `sign · OI · multiplier`.
