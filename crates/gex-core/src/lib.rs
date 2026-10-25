@@ -5,10 +5,12 @@
 
 pub mod bsm;
 pub mod error;
+pub mod exposure;
 pub mod math;
 pub mod types;
 
 pub use bsm::{BsmInput, Greeks};
 pub use error::{GexError, Result};
+pub use exposure::{ExposureConfig, ExposureReport, Regime, SpotGrid, StrikeExposure, analyze};
 pub use math::{erfc, norm_cdf, norm_pdf};
 pub use types::{Chain, EXPIRY_TOLERANCE, OptionContract, OptionKind};

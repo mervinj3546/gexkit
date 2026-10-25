@@ -56,9 +56,9 @@ pub enum GexError {
     /// No contract in the chain has the requested expiry.
     #[error("no contracts expire at {0}")]
     ExpiryNotFound(f64),
-    /// The spot grid configuration is unusable.
-    #[error("invalid spot grid: {0}")]
-    InvalidGrid(&'static str),
+    /// An `ExposureConfig` field is out of range.
+    #[error("invalid exposure config: {0}")]
+    InvalidConfig(&'static str),
 }
 
 impl GexError {
