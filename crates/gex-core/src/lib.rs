@@ -6,6 +6,7 @@
 pub mod bsm;
 pub mod error;
 pub mod exposure;
+pub mod levels;
 pub mod math;
 pub mod types;
 
@@ -15,5 +16,6 @@ pub use exposure::{
     ExposureConfig, ExposureReport, Regime, SpotGrid, StrikeExposure, ZeroGamma, analyze,
     zero_gamma,
 };
+pub use levels::{ExpectedMove, PriceSource, Walls, expected_move, max_pain, walls};
 pub use math::{erfc, norm_cdf, norm_pdf};
 pub use types::{Chain, EXPIRY_TOLERANCE, OptionContract, OptionKind};

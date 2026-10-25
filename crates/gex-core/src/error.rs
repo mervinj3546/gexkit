@@ -56,6 +56,9 @@ pub enum GexError {
     /// No contract in the chain has the requested expiry.
     #[error("no contracts expire at {0}")]
     ExpiryNotFound(f64),
+    /// No strike at the requested expiry has both a call and a put.
+    #[error("no strike at expiry {0} has both a call and a put")]
+    NoStraddle(f64),
     /// An `ExposureConfig` field is out of range.
     #[error("invalid exposure config: {0}")]
     InvalidConfig(&'static str),

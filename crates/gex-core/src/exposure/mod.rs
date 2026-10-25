@@ -18,6 +18,7 @@ pub use flip::{ZeroGamma, zero_gamma};
 
 use crate::bsm::{self, BsmInput};
 use crate::error::{GexError, Result};
+use crate::levels::{Walls, walls};
 use crate::types::{Chain, OptionContract, OptionKind};
 
 /// One percent, the move size GEX and vanna exposure are quoted for.
@@ -164,6 +165,8 @@ pub struct ExposureReport {
     pub regime: Regime,
     /// Zero-gamma level, if total GEX changes sign on the grid.
     pub zero_gamma: Option<ZeroGamma>,
+    /// Call and put GEX walls.
+    pub walls: Walls,
     /// Contracts left out because `iv <= 0`.
     pub skipped: usize,
 }
@@ -196,6 +199,7 @@ pub fn analyze(chain: &Chain, cfg: &ExposureConfig) -> Result<ExposureReport> {
         total_dex: sum(|s| s.dex),
         total_vanna: sum(|s| s.vanna),
         total_charm: sum(|s| s.charm),
+        walls: walls(&per_strike, chain.spot()),
         per_strike,
         regime,
         zero_gamma: flip::zero_gamma_prepared(chain, &prep, cfg),
@@ -229,14 +233,7 @@ pub(crate) struct Prepared<'a> {
 impl<'a> Prepared<'a> {
     pub(crate) fn new(chain: &'a Chain) -> Self {
         let mut all: Vec<&OptionContract> = chain.contracts().iter().collect();
-        all.sort_by(|a, b| {
-            a.strike()
-                .total_cmp(&b.strike())
-                .then(a.kind().cmp(&b.kind()))
-                .then(a.expiry().total_cmp(&b.expiry()))
-                .then(a.iv().total_cmp(&b.iv()))
-                .then(a.open_interest().cmp(&b.open_interest()))
-        });
+        all.sort_by(|a, b| OptionContract::canonical_cmp(a, b));
         let usable: Vec<_> = all.iter().copied().filter(|c| c.iv() > 0.0).collect();
         Self {
             skipped: all.len() - usable.len(),
