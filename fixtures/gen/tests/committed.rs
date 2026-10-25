@@ -31,6 +31,8 @@ fn same(a: &OptionContract, b: &OptionContract) -> bool {
         && near(a.ask(), b.ask(), 0.01)
 }
 
+// Spot and strikes are generated exactly (no rounding), so equality is exact.
+#[allow(clippy::float_cmp)]
 #[test]
 fn committed_chains_match_generator() {
     for (name, generated) in gex_fixtures::presets::golden() {

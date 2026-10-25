@@ -196,6 +196,9 @@ impl<F: Fn(f64) -> f64> Search<F> {
 }
 
 #[cfg(test)]
+// These tests compare exact values on purpose: identical code paths, exact
+// limits such as 0 and 1, and values passed through unchanged.
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
     use crate::exposure::{SpotGrid, total_gex_at};

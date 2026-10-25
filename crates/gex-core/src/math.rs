@@ -142,6 +142,9 @@ fn exp_neg_sq(y: f64) -> f64 {
 }
 
 #[cfg(test)]
+// These tests compare exact values on purpose: identical code paths, exact
+// limits such as 0 and 1, and values passed through unchanged.
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
 

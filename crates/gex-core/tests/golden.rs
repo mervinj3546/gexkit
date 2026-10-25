@@ -87,6 +87,9 @@ fn per_contract_greeks() {
     }
 }
 
+// Strikes and expiries are read from the same JSON as the reference used,
+// so they must match exactly.
+#[allow(clippy::float_cmp)]
 #[test]
 fn exposures_and_levels() {
     for name in NAMES {
@@ -175,6 +178,9 @@ fn exposures_and_levels() {
     }
 }
 
+// Strikes and expiries are read from the same JSON as the reference used,
+// so they must match exactly.
+#[allow(clippy::float_cmp)]
 #[test]
 fn per_expiry_levels() {
     for name in NAMES {
