@@ -12,6 +12,10 @@
 //!
 //! Volatility is held per contract (sticky strike) when spot is moved.
 
+mod flip;
+
+pub use flip::{ZeroGamma, zero_gamma};
+
 use crate::bsm::{self, BsmInput};
 use crate::error::{GexError, Result};
 use crate::types::{Chain, OptionContract, OptionKind};
@@ -158,6 +162,8 @@ pub struct ExposureReport {
     pub total_charm: f64,
     /// Sign of total GEX, with the neutral band applied.
     pub regime: Regime,
+    /// Zero-gamma level, if total GEX changes sign on the grid.
+    pub zero_gamma: Option<ZeroGamma>,
     /// Contracts left out because `iv <= 0`.
     pub skipped: usize,
 }
@@ -192,6 +198,7 @@ pub fn analyze(chain: &Chain, cfg: &ExposureConfig) -> Result<ExposureReport> {
         total_charm: sum(|s| s.charm),
         per_strike,
         regime,
+        zero_gamma: flip::zero_gamma_prepared(chain, &prep, cfg),
         skipped: prep.skipped,
     })
 }

@@ -11,6 +11,9 @@ pub mod types;
 
 pub use bsm::{BsmInput, Greeks};
 pub use error::{GexError, Result};
-pub use exposure::{ExposureConfig, ExposureReport, Regime, SpotGrid, StrikeExposure, analyze};
+pub use exposure::{
+    ExposureConfig, ExposureReport, Regime, SpotGrid, StrikeExposure, ZeroGamma, analyze,
+    zero_gamma,
+};
 pub use math::{erfc, norm_cdf, norm_pdf};
 pub use types::{Chain, EXPIRY_TOLERANCE, OptionContract, OptionKind};
