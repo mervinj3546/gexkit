@@ -3,12 +3,13 @@
   "min_time": 1.902587519025875e-06,
   "call_sign": 1.0,
   "put_sign": -1.0,
-  "grid": [
+  "flip_range": [
    0.9,
-   1.1,
-   201
+   1.1
   ],
-  "bisect_tol": 1e-10
+  "flip_dense_points": 4001,
+  "flip_method": "illinois",
+  "negligible_fraction": 1e-09
  },
  "contracts": [
   {
@@ -2698,10 +2699,10 @@
  "regime": "PositiveGamma",
  "skipped": 0,
  "zero_gamma": {
-  "level": 5003.965178361163,
+  "level": 5003.965178346739,
   "crossings": [
-   5003.965178361163,
-   5262.68408613503
+   5003.965178346739,
+   5262.684086231811
   ]
  },
  "walls": {

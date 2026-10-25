@@ -5,16 +5,21 @@ Reads every ``<name>.chain.json`` in a directory and writes
 
 Usage: py -3 -I fixtures/reference/gex_reference.py fixtures/golden
 
-Conventions match docs/CONVENTIONS.md: dealer signs calls +1 / puts -1,
-GEX = gamma*OI*mult*S^2*0.01, DEX = delta*OI*mult*S,
+Conventions (the definitions, shared with docs/CONVENTIONS.md): dealer signs
+calls +1 / puts -1, GEX = gamma*OI*mult*S^2*0.01, DEX = delta*OI*mult*S,
 vanna exposure = vanna*OI*mult*S*0.01, charm exposure = charm*OI*mult*S/365
 with charm = -dDelta/dT, a one-minute floor on T for exposures, contracts
-with iv <= 0 skipped, a +/-10% x 201-point flip grid refined by bisection.
+with iv <= 0 skipped. A zero-gamma crossing is the midpoint of an interval
+in [0.9 S, 1.1 S] where |GEX| <= negligible_gex that separates positive from
+negative GEX.
 
-Greeks use the textbook Black-Scholes-Merton formulas and math.erfc, so they
-are computed independently of the Rust code. Sums are also reported as sums
-of absolute contributions (``*_abs``) so the Rust side can scale its
-tolerance when positive and negative terms cancel.
+Methods (deliberately different from the Rust code, so agreement means
+something): greeks use the textbook Black-Scholes-Merton formulas and
+math.erfc. The flip is found by sweeping a 4001-point grid, not 201, and
+locating roots and interval edges with Illinois regula falsi on GEX and on
+|GEX| - threshold, not bisection. Sums are also reported as sums of absolute
+contributions (``*_abs``) so the Rust side can scale its tolerance when
+positive and negative terms cancel.
 """
 
 import json
@@ -25,10 +30,11 @@ from pathlib import Path
 DAYS_PER_YEAR = 365.0
 MIN_TIME = 1.0 / (DAYS_PER_YEAR * 1440.0)
 CALL_SIGN, PUT_SIGN = 1.0, -1.0
-GRID_LOWER, GRID_UPPER, GRID_POINTS = 0.9, 1.1, 201
-BISECT_TOL = 1e-10
-BISECT_MAX_STEPS = 200
+GRID_LOWER, GRID_UPPER = 0.9, 1.1
 NEGLIGIBLE_GEX_FRACTION = 1e-9
+DENSE_POINTS = 4001
+ROOT_TOL = 1e-12
+ROOT_MAX_STEPS = 500
 EXPIRY_TOLERANCE = 1e-9
 TIE_TOLERANCE = 1e-12
 
@@ -94,13 +100,26 @@ def usable(chain):
     return [c for c in chain["contracts"] if c["iv"] > 0.0]
 
 
-def total_gex_at(chain, spot):
-    mult = chain["multiplier"]
-    total = 0.0
+def gex_function(chain):
+    """Total GEX as a function of spot, with per-contract constants hoisted
+    so the dense sweep stays fast."""
+    r, q, mult = chain["rate"], chain["div_yield"], chain["multiplier"]
+    terms = []
     for c in usable(chain):
-        g = exposure_greeks(chain, c, spot)
-        total += sign(c["kind"]) * c["open_interest"] * mult * g["gamma"] * spot * spot * 0.01
-    return total
+        t = max(c["expiry"], MIN_TIME)
+        sigma = c["iv"]
+        vol = sigma * math.sqrt(t)
+        w = sign(c["kind"]) * c["open_interest"] * mult
+        terms.append((w * math.exp(-q * t), c["strike"], vol, (r - q + 0.5 * sigma * sigma) * t))
+
+    def gex(s):
+        total = 0.0
+        for w_dq, k, vol, drift in terms:
+            d1 = (math.log(s / k) + drift) / vol
+            total += w_dq * norm_pdf(d1) / (s * vol) * s * s * 0.01
+        return total
+
+    return gex
 
 
 def per_strike(chain):
@@ -143,58 +162,54 @@ def negligible_gex(chain):
     return NEGLIGIBLE_GEX_FRACTION * peak
 
 
-def edge(negligible, lo, hi, lo_significant, tol):
-    """Boundary between negligible and significant values in [lo, hi]."""
-    for _ in range(BISECT_MAX_STEPS):
-        if hi - lo <= tol:
-            break
-        mid = 0.5 * (lo + hi)
-        if negligible(mid) == lo_significant:
-            hi = mid
+def illinois(g, a, b, tol):
+    """Root of g in [a, b], where g(a) and g(b) have opposite signs, by the
+    Illinois variant of regula falsi."""
+    ga, gb = g(a), g(b)
+    if ga == 0.0:
+        return a
+    if gb == 0.0:
+        return b
+    for _ in range(ROOT_MAX_STEPS):
+        c = b - gb * (b - a) / (gb - ga)
+        gc = g(c)
+        if gc == 0.0:
+            return c
+        if (gc < 0.0) != (gb < 0.0):
+            a, ga = b, gb
         else:
-            lo = mid
-    return 0.5 * (lo + hi)
-
-
-def gap_middle(negligible, a0, a1, b0, b1, tol):
-    return 0.5 * (edge(negligible, a0, a1, True, tol) + edge(negligible, b0, b1, False, tol))
-
-
-def crossing(f, threshold, lo, hi, lo_neg, tol):
-    negligible = lambda s: abs(f(s)) <= threshold
-    for _ in range(BISECT_MAX_STEPS):
-        if hi - lo <= tol:
+            ga *= 0.5
+        b, gb = c, gc
+        if abs(b - a) <= tol:
             break
-        mid = 0.5 * (lo + hi)
-        v = f(mid)
-        if abs(v) <= threshold:
-            return gap_middle(negligible, lo, mid, mid, hi, tol)
-        if (v < 0.0) == lo_neg:
-            lo = mid
-        else:
-            hi = mid
-    return 0.5 * (lo + hi)
+    return b
 
 
 def zero_gamma(chain):
+    """Crossings on a 4001-point sweep. For each sign change between
+    consecutive non-negligible samples, find a point z with |GEX| <=
+    threshold between them (a negligible sample, or else the root of GEX),
+    then the interval's edges as roots of |GEX| - threshold on each side of
+    z. The crossing is the edges' midpoint."""
     spot = chain["spot"]
     threshold = negligible_gex(chain)
     if threshold <= 0.0:
         return None
-    f = lambda s: total_gex_at(chain, s)
-    negligible = lambda s: abs(f(s)) <= threshold
-    tol = BISECT_TOL * spot
-    last = GRID_POINTS - 1
-    grid = [spot * (GRID_LOWER + (GRID_UPPER - GRID_LOWER) * j / last) for j in range(GRID_POINTS)]
-    significant = [(j, v < 0.0) for j, v in enumerate(f(s) for s in grid) if abs(v) > threshold]
+    f = gex_function(chain)
+    excess = lambda s: abs(f(s)) - threshold
+    tol = ROOT_TOL * spot
+    last = DENSE_POINTS - 1
+    xs = [spot * (GRID_LOWER + (GRID_UPPER - GRID_LOWER) * j / last) for j in range(DENSE_POINTS)]
+    values = [f(x) for x in xs]
+    significant = [j for j, v in enumerate(values) if abs(v) > threshold]
     crossings = []
-    for (i, i_neg), (k, k_neg) in zip(significant, significant[1:]):
-        if i_neg == k_neg:
+    for i, k in zip(significant, significant[1:]):
+        if (values[i] < 0.0) == (values[k] < 0.0):
             continue
-        if k == i + 1:
-            crossings.append(crossing(f, threshold, grid[i], grid[k], i_neg, tol))
-        else:
-            crossings.append(gap_middle(negligible, grid[i], grid[i + 1], grid[k - 1], grid[k], tol))
+        z = xs[i + 1] if k > i + 1 else illinois(f, xs[i], xs[k], tol)
+        left = z if excess(z) == 0.0 else illinois(excess, xs[i], z, tol)
+        right = z if excess(z) == 0.0 else illinois(excess, z, xs[k], tol)
+        crossings.append(0.5 * (left + right))
     if not crossings:
         return None
     level = min(crossings, key=lambda x: (abs(x - spot), x))
@@ -305,7 +320,8 @@ def analyze(chain):
     ]
     return dict(
         config=dict(min_time=MIN_TIME, call_sign=CALL_SIGN, put_sign=PUT_SIGN,
-                    grid=[GRID_LOWER, GRID_UPPER, GRID_POINTS], bisect_tol=BISECT_TOL),
+                    flip_range=[GRID_LOWER, GRID_UPPER], flip_dense_points=DENSE_POINTS,
+                    flip_method="illinois", negligible_fraction=NEGLIGIBLE_GEX_FRACTION),
         contracts=contract_greeks,
         per_strike=rows,
         **totals,

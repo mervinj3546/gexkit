@@ -48,9 +48,13 @@ vol point and charm exposure per calendar day.
 
 - **Golden tests.** `fixtures/gen` generates deterministic synthetic chains
   (0DTE index, multi-expiry ETF, put-heavy negative gamma, edge cases), and
-  `fixtures/reference/gex_reference.py` recomputes everything from the
-  textbook formulas using only Python's standard library. `gex-core` must
-  match to within the tolerances in CONVENTIONS.md.
+  `fixtures/reference/gex_reference.py` recomputes everything using only
+  Python's standard library. It shares the conventions (units, signs, tie
+  rules, the negligible-GEX threshold) but not the methods: greeks come from
+  the textbook formulas and `math.erfc`, and the flip comes from a
+  4,001-point sweep with regula falsi rather than the 201-point grid with
+  bisection. `gex-core` must match to within the tolerances in
+  CONVENTIONS.md.
 - **Property tests.** Put-call parity, delta parity, price bounds and
   monotonicity, finite-difference checks of every greek, no NaN on any valid
   input. For the engine: results don't depend on input order, exposures

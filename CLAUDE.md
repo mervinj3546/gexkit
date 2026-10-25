@@ -64,8 +64,10 @@ py -3 -I fixtures/reference/gex_reference.py fixtures/golden
 - Totals with cancelling terms need tolerances scaled by the sum of absolute
   contributions, not by the result (see `*_abs` in the expected JSON).
 - serde_json uses `float_roundtrip`; without it parsed floats can be 1 ulp off.
-- The Python reference must stay stdlib-only and written from textbook
-  formulas, not ported from the Rust code.
+- The Python reference must stay stdlib-only. It shares conventions with the
+  Rust code but must not share methods: textbook greeks, and a different
+  sweep and root finder for the flip. Never port Rust logic into it; a bug
+  copied into both cannot be caught by the goldens.
 
 ## Conventions (authoritative summary; details in docs/CONVENTIONS.md)
 
