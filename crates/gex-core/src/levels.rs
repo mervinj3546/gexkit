@@ -109,18 +109,20 @@ pub fn expected_move(chain: &Chain, expiry: f64) -> Result<ExpectedMove> {
     if contracts.is_empty() {
         return Err(GexError::ExpiryNotFound(expiry));
     }
-    // Canonical order, so duplicate listings resolve the same way every time.
+    // Canonical order groups each strike's contracts together and makes the
+    // first call and first put at a strike the same every time.
     contracts.sort_by(|a, b| OptionContract::canonical_cmp(a, b));
-    let leg = |kind: OptionKind, strike: f64| {
-        contracts
-            .iter()
-            .copied()
-            .find(|c| c.kind() == kind && c.strike().total_cmp(&strike).is_eq())
-    };
     let spot = chain.spot();
-    let (strike, call, put) = distinct_strikes(&contracts)
-        .into_iter()
-        .filter_map(|k| Some((k, leg(OptionKind::Call, k)?, leg(OptionKind::Put, k)?)))
+    let (strike, call, put) = contracts
+        .chunk_by(|a, b| a.strike().total_cmp(&b.strike()).is_eq())
+        .filter_map(|group| {
+            let first = |kind| group.iter().copied().find(|c| c.kind() == kind);
+            Some((
+                group[0].strike(),
+                first(OptionKind::Call)?,
+                first(OptionKind::Put)?,
+            ))
+        })
         .min_by(|a, b| nearer(a.0, b.0, spot))
         .ok_or(GexError::NoStraddle(expiry))?;
     let (call_price, call_source) = leg_price(chain, call);

@@ -13,6 +13,7 @@ repository = "https://github.com/mervinj3546/gexkit"
 gex-core = { path = "crates/gex-core" }
 gex-fixtures = { path = "fixtures/gen" }
 serde = { version = "1", features = ["derive"] }
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 proptest = "1"
 serde_json = { version = "1", features = ["float_roundtrip"] }
 thiserror = "2"

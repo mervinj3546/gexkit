@@ -25,7 +25,8 @@ jobs:
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      # The library alone: dev-dependencies would switch the serde feature on.
+      - run: cargo clippy -p gex-core --lib -- -D warnings
 
   test:
     strategy:
