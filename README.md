@@ -54,8 +54,10 @@ vol point and charm exposure per calendar day.
 - **Property tests.** Put-call parity, delta parity, price bounds and
   monotonicity, finite-difference checks of every greek, no NaN on any valid
   input. For the engine: results don't depend on input order, exposures
-  scale with open interest and add across chains, flip crossings are real
-  sign changes, max pain beats brute force.
+  scale with open interest and add across chains, the reported flip
+  crossings are exactly the sign changes of non-negligible GEX on an
+  independent sweep of the grid (none for one-sided chains), max pain beats
+  brute force.
 - **Benchmarks.** `cargo bench -p gex-core` runs on a 3,002-contract 0DTE
   chain. First run, Windows, release build:
 

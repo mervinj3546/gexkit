@@ -28,6 +28,7 @@ CALL_SIGN, PUT_SIGN = 1.0, -1.0
 GRID_LOWER, GRID_UPPER, GRID_POINTS = 0.9, 1.1, 201
 BISECT_TOL = 1e-10
 BISECT_MAX_STEPS = 200
+NEGLIGIBLE_GEX_FRACTION = 1e-9
 EXPIRY_TOLERANCE = 1e-9
 TIE_TOLERANCE = 1e-12
 
@@ -130,16 +131,46 @@ def per_strike(chain):
     return [rows[k] for k in sorted(rows)]
 
 
-def bisect(f, lo, hi, f_lo, spot):
+def negligible_gex(chain):
+    """NEGLIGIBLE_GEX_FRACTION times the sum of each usable contract's peak
+    dollar gamma (spot at its own strike)."""
+    mult = chain["multiplier"]
+    peak = 0.0
+    for c in usable(chain):
+        k = c["strike"]
+        g = exposure_greeks(chain, c, k)
+        peak += abs(sign(c["kind"]) * c["open_interest"] * mult) * g["gamma"] * k * k * 0.01
+    return NEGLIGIBLE_GEX_FRACTION * peak
+
+
+def edge(negligible, lo, hi, lo_significant, tol):
+    """Boundary between negligible and significant values in [lo, hi]."""
     for _ in range(BISECT_MAX_STEPS):
-        if hi - lo <= BISECT_TOL * spot:
+        if hi - lo <= tol:
             break
         mid = 0.5 * (lo + hi)
-        f_mid = f(mid)
-        if f_mid == 0.0:
-            return mid
-        if (f_mid < 0.0) == (f_lo < 0.0):
-            lo, f_lo = mid, f_mid
+        if negligible(mid) == lo_significant:
+            hi = mid
+        else:
+            lo = mid
+    return 0.5 * (lo + hi)
+
+
+def gap_middle(negligible, a0, a1, b0, b1, tol):
+    return 0.5 * (edge(negligible, a0, a1, True, tol) + edge(negligible, b0, b1, False, tol))
+
+
+def crossing(f, threshold, lo, hi, lo_neg, tol):
+    negligible = lambda s: abs(f(s)) <= threshold
+    for _ in range(BISECT_MAX_STEPS):
+        if hi - lo <= tol:
+            break
+        mid = 0.5 * (lo + hi)
+        v = f(mid)
+        if abs(v) <= threshold:
+            return gap_middle(negligible, lo, mid, mid, hi, tol)
+        if (v < 0.0) == lo_neg:
+            lo = mid
         else:
             hi = mid
     return 0.5 * (lo + hi)
@@ -147,16 +178,23 @@ def bisect(f, lo, hi, f_lo, spot):
 
 def zero_gamma(chain):
     spot = chain["spot"]
+    threshold = negligible_gex(chain)
+    if threshold <= 0.0:
+        return None
     f = lambda s: total_gex_at(chain, s)
+    negligible = lambda s: abs(f(s)) <= threshold
+    tol = BISECT_TOL * spot
     last = GRID_POINTS - 1
     grid = [spot * (GRID_LOWER + (GRID_UPPER - GRID_LOWER) * j / last) for j in range(GRID_POINTS)]
-    values = [f(s) for s in grid]
+    significant = [(j, v < 0.0) for j, v in enumerate(f(s) for s in grid) if abs(v) > threshold]
     crossings = []
-    for j in range(GRID_POINTS):
-        if values[j] == 0.0:
-            crossings.append(grid[j])
-        elif j + 1 < GRID_POINTS and values[j] * values[j + 1] < 0.0:
-            crossings.append(bisect(f, grid[j], grid[j + 1], values[j], spot))
+    for (i, i_neg), (k, k_neg) in zip(significant, significant[1:]):
+        if i_neg == k_neg:
+            continue
+        if k == i + 1:
+            crossings.append(crossing(f, threshold, grid[i], grid[k], i_neg, tol))
+        else:
+            crossings.append(gap_middle(negligible, grid[i], grid[i + 1], grid[k - 1], grid[k], tol))
     if not crossings:
         return None
     level = min(crossings, key=lambda x: (abs(x - spot), x))

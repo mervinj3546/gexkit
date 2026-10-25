@@ -2,7 +2,7 @@
 
 use gex_core::{
     Chain, ExposureConfig, ExposureReport, OptionContract, OptionKind, analyze, expected_move,
-    max_pain, total_gex_at,
+    max_pain, negligible_gex, total_gex_at,
 };
 use proptest::prelude::*;
 
@@ -150,21 +150,41 @@ proptest! {
     }
 
     #[test]
-    fn zero_gamma_crossings_are_sign_changes(ch in chain()) {
+    fn zero_gamma_crossings_match_grid_sign_changes(ch in chain()) {
+        // Sweep the grid independently of zero_gamma and keep only values
+        // above the negligible threshold. Each sign alternation among them is
+        // exactly one crossing, lying between the alternation's grid points;
+        // no alternation means None.
         let cfg = ExposureConfig::default();
         let Some(r) = report(&ch) else { return Ok(()) };
-        let Some(z) = r.zero_gamma else { return Ok(()) };
-        let (lo, hi) = (ch.spot() * cfg.flip_grid.lower, ch.spot() * cfg.flip_grid.upper);
-        prop_assert!(z.crossings.windows(2).all(|w| w[0] < w[1]), "{:?}", z.crossings);
-        prop_assert!(z.crossings.contains(&z.level));
-        let h = 1e-6 * ch.spot();
-        for &x in &z.crossings {
-            prop_assert!((lo..=hi).contains(&x));
-            let below = total_gex_at(&ch, x - h, &cfg);
-            let above = total_gex_at(&ch, x + h, &cfg);
-            // Either a strict sign change, or GEX is exactly zero here.
-            prop_assert!(below * above <= 0.0 || total_gex_at(&ch, x, &cfg) == 0.0,
-                "no sign change at {x}: {below} / {above}");
+        let threshold = negligible_gex(&ch, &cfg);
+        let g = cfg.flip_grid;
+        #[allow(clippy::cast_precision_loss)]
+        let grid: Vec<f64> = (0..g.points)
+            .map(|j| ch.spot() * (g.lower + (g.upper - g.lower) * j as f64 / (g.points - 1) as f64))
+            .collect();
+        let significant: Vec<(f64, bool)> = grid
+            .iter()
+            .filter_map(|&s| {
+                let v = total_gex_at(&ch, s, &cfg);
+                (v.abs() > threshold).then_some((s, v < 0.0))
+            })
+            .collect();
+        let brackets: Vec<(f64, f64)> = significant
+            .windows(2)
+            .filter(|w| w[0].1 != w[1].1)
+            .map(|w| (w[0].0, w[1].0))
+            .collect();
+
+        match r.zero_gamma {
+            None => prop_assert!(brackets.is_empty(), "missed crossings in {brackets:?}"),
+            Some(z) => {
+                prop_assert_eq!(z.crossings.len(), brackets.len(), "{:?} vs {:?}", z.crossings, brackets);
+                prop_assert!(z.crossings.contains(&z.level));
+                for (&x, &(a, b)) in z.crossings.iter().zip(&brackets) {
+                    prop_assert!(a <= x && x <= b, "crossing {x} outside its bracket [{a}, {b}]");
+                }
+            }
         }
     }
 

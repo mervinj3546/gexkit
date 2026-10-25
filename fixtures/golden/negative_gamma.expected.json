@@ -1544,9 +1544,9 @@
  "regime": "NegativeGamma",
  "skipped": 0,
  "zero_gamma": {
-  "level": 104.36517380807699,
+  "level": 104.36517380513548,
   "crossings": [
-   104.36517380807699
+   104.36517380513548
   ]
  },
  "walls": {

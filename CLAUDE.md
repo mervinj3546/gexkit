@@ -85,9 +85,11 @@ py -3 -I fixtures/reference/gex_reference.py fixtures/golden
 - Exposure engine floors T at `min_time` (default 1 minute = 1/(365·1440)) and
   skips contracts with iv ≤ 0, counting them in `skipped`.
 - Regime = sign of total GEX at spot with a neutral band (default 0).
-- Zero-gamma flip: sweep spot over ±10% in 201 points with sticky-strike IV,
-  refine each sign change by bisection; report all crossings, `level` is the
-  one nearest spot.
+- Zero-gamma flip: sweep spot over ±10% in 201 points with sticky-strike IV.
+  `|GEX| <= negligible_gex` (1e-9 × Σ per-contract peak dollar gamma) counts
+  as zero; a crossing is a sign change between consecutive non-negligible
+  values (bisected, or the middle of a negligible gap). Report all crossings,
+  `level` is the one nearest spot; `None` if one-signed or all negligible.
 - Call wall = strike with largest call GEX; put wall = strike with most
   negative put GEX.
 - Max pain and expected move take an `expiry` (matched within 1e-9 years).

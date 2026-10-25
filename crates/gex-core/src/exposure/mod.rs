@@ -14,7 +14,7 @@
 
 mod flip;
 
-pub use flip::{ZeroGamma, zero_gamma};
+pub use flip::{NEGLIGIBLE_GEX_FRACTION, ZeroGamma, negligible_gex, zero_gamma};
 
 use crate::bsm::{self, BsmInput};
 use crate::error::{GexError, Result};
@@ -302,7 +302,7 @@ fn per_strike_prepared(
 
 /// `sign · OI · multiplier`.
 #[allow(clippy::cast_precision_loss)] // open interest is far below 2^53
-fn weight(chain: &Chain, c: &OptionContract, cfg: &ExposureConfig) -> f64 {
+pub(crate) fn weight(chain: &Chain, c: &OptionContract, cfg: &ExposureConfig) -> f64 {
     cfg.sign(c.kind()) * c.open_interest() as f64 * chain.multiplier()
 }
 

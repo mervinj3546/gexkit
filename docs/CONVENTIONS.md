@@ -89,13 +89,35 @@ Otherwise the sign of total GEX at spot gives `PositiveGamma` or
 Total GEX is evaluated on a spot grid. The default grid runs from `0.9·S`
 to `1.1·S` in 201 points, ends included, as
 `S·(lower + (upper − lower)·j/(n−1))`. Each contract's IV is held fixed as
-spot moves (sticky strike), and T and r are unchanged. A grid point where
-GEX is exactly 0 is itself a crossing. Every strict sign change between
-neighbouring points is bisected until the bracket is narrower than
-`1e-10·S`, and the midpoint is taken. `ZeroGamma::crossings` lists every
-crossing in ascending order, and `level` is the one nearest spot (the lower
-one on a tie). The result is `None` if GEX keeps one sign over the whole
-grid.
+spot moves (sticky strike), and T and r are unchanged.
+
+**Negligible values.** Near expiry, gamma underflows to exactly 0 a few
+percent from every strike, and far-wing tails can change sign at
+magnitudes like 1e-30 dollars. So `|GEX| <= negligible_gex` counts as zero,
+where
+
+```
+negligible_gex = 1e-9 · Σ_{iv > 0} |sign · OI · multiplier| · Γ(S = K) · K² · 0.01
+```
+
+is a fraction (`NEGLIGIBLE_GEX_FRACTION`) of the sum of each contract's
+peak dollar gamma, taken with spot at its own strike. It doesn't depend on
+the grid.
+
+**Crossings.** A crossing is a sign change between consecutive
+non-negligible grid values:
+
+- **Neighbouring points:** the bracket is bisected until it is narrower
+  than `1e-10·S`, and the midpoint is taken.
+- **Across a negligible gap:** both edges of the gap (where `|GEX|` falls
+  to the threshold) are found by bisection, and the crossing is the
+  midpoint of the two edges. The same applies if bisection between
+  neighbouring points lands in a negligible value.
+
+`ZeroGamma::crossings` lists every crossing in ascending order, and `level`
+is the one nearest spot (the lower one on a tie). The result is `None` when
+every grid value is negligible (for example, zero open interest) or when the
+non-negligible values all have one sign (for example, a calls-only chain).
 
 ## Levels
 
