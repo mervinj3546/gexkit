@@ -50,9 +50,16 @@ pub enum GexError {
     /// Contract multiplier must be finite and positive.
     #[error("multiplier must be positive, got {0}")]
     InvalidMultiplier(f64),
-    /// The operation needs at least one contract.
-    #[error("chain has no usable contracts")]
+    /// The chain has no contracts at all.
+    #[error("chain has no contracts")]
     EmptyChain,
+    /// Every contract has `iv <= 0`, so none can be priced; `skipped` is
+    /// how many were set aside. Usually the data source supplied no IV.
+    #[error("no contract has a positive implied volatility ({skipped} skipped with iv <= 0)")]
+    NoUsableContracts {
+        /// Contracts set aside for `iv <= 0`.
+        skipped: usize,
+    },
     /// No contract in the chain has the requested expiry.
     #[error("no contracts expire at {0}")]
     ExpiryNotFound(f64),

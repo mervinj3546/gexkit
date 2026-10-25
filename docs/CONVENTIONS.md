@@ -71,7 +71,10 @@ Each contract contributes `w = sign · OI · multiplier` times a greek:
   The pure `bsm` functions are not floored.
 - **Missing IV.** Contracts with `iv <= 0` contribute nothing and are counted
   in `ExposureReport::skipped`. Their open interest still appears in
-  `call_oi` / `put_oi`.
+  `call_oi` / `put_oi`. If *every* contract has `iv <= 0`, `analyze` and
+  `zero_gamma` return `GexError::NoUsableContracts { skipped }` instead of a
+  report, so the count is never lost; `GexError::EmptyChain` means the chain
+  has no contracts at all.
 - **Per strike.** Rows sum every expiry at a strike and come back in
   ascending strike order.
 - **Determinism.** Contracts are sorted into a canonical order over every

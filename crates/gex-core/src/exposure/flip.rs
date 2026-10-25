@@ -17,7 +17,7 @@
 
 use super::{ExposureConfig, Prepared, input, weight};
 use crate::bsm;
-use crate::error::{GexError, Result};
+use crate::error::Result;
 use crate::types::Chain;
 
 /// Bisection stops once the bracket is narrower than this fraction of spot.
@@ -43,14 +43,13 @@ pub struct ZeroGamma {
 ///
 /// # Errors
 ///
-/// Returns [`GexError::InvalidConfig`] for a bad config, or
-/// [`GexError::EmptyChain`] if no contract has a positive IV.
+/// Returns [`GexError::InvalidConfig`](crate::GexError::InvalidConfig) for a bad config,
+/// [`GexError::EmptyChain`](crate::GexError::EmptyChain) if the chain has no contracts, or
+/// [`GexError::NoUsableContracts`](crate::GexError::NoUsableContracts) if every contract has `iv <= 0`.
 pub fn zero_gamma(chain: &Chain, cfg: &ExposureConfig) -> Result<Option<ZeroGamma>> {
     cfg.validate()?;
     let prep = Prepared::new(chain);
-    if prep.usable.is_empty() {
-        return Err(GexError::EmptyChain);
-    }
+    prep.require_usable()?;
     Ok(zero_gamma_prepared(chain, &prep, cfg))
 }
 

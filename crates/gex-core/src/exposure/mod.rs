@@ -175,14 +175,13 @@ pub struct ExposureReport {
 ///
 /// # Errors
 ///
-/// Returns [`GexError::InvalidConfig`] for a bad config, or
-/// [`GexError::EmptyChain`] if no contract has a positive IV.
+/// Returns [`GexError::InvalidConfig`] for a bad config,
+/// [`GexError::EmptyChain`] if the chain has no contracts, or
+/// [`GexError::NoUsableContracts`] if every contract has `iv <= 0`.
 pub fn analyze(chain: &Chain, cfg: &ExposureConfig) -> Result<ExposureReport> {
     cfg.validate()?;
     let prep = Prepared::new(chain);
-    if prep.usable.is_empty() {
-        return Err(GexError::EmptyChain);
-    }
+    prep.require_usable()?;
     let per_strike = per_strike_prepared(chain, &prep, cfg);
     let sum = |f: fn(&StrikeExposure) -> f64| per_strike.iter().map(f).sum::<f64>();
     let total_gex = sum(|s| s.gex);
@@ -231,6 +230,20 @@ pub(crate) struct Prepared<'a> {
 }
 
 impl<'a> Prepared<'a> {
+    /// [`GexError::EmptyChain`] when there are no contracts, and
+    /// [`GexError::NoUsableContracts`] when every one has `iv <= 0`.
+    pub(crate) fn require_usable(&self) -> Result<()> {
+        if self.all.is_empty() {
+            Err(GexError::EmptyChain)
+        } else if self.usable.is_empty() {
+            Err(GexError::NoUsableContracts {
+                skipped: self.skipped,
+            })
+        } else {
+            Ok(())
+        }
+    }
+
     pub(crate) fn new(chain: &'a Chain) -> Self {
         let mut all: Vec<&OptionContract> = chain.contracts().iter().collect();
         all.sort_by(|a, b| OptionContract::canonical_cmp(a, b));
@@ -398,7 +411,7 @@ mod tests {
     }
 
     #[test]
-    fn neutral_band_and_empty_chain() {
+    fn neutral_band_and_unusable_chains() {
         let chain = Chain::new(
             100.0,
             0.0,
@@ -421,6 +434,19 @@ mod tests {
         .unwrap();
         assert_eq!(
             analyze(&no_iv, &ExposureConfig::default()),
+            Err(GexError::NoUsableContracts { skipped: 1 })
+        );
+        assert_eq!(
+            zero_gamma(&no_iv, &ExposureConfig::default()),
+            Err(GexError::NoUsableContracts { skipped: 1 })
+        );
+        let empty = Chain::new(100.0, 0.0, 0.0, vec![]).unwrap();
+        assert_eq!(
+            analyze(&empty, &ExposureConfig::default()),
+            Err(GexError::EmptyChain)
+        );
+        assert_eq!(
+            zero_gamma(&empty, &ExposureConfig::default()),
             Err(GexError::EmptyChain)
         );
     }
