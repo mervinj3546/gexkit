@@ -23,6 +23,12 @@
 //!
 //! See `docs/CONVENTIONS.md` in the repository for units and sign conventions.
 
+/// Version of the methodology described in `docs/CONVENTIONS.md`: units,
+/// signs, grouping tolerances, the flip search and the levels. It is bumped
+/// whenever a convention change can alter a computed number, so stored
+/// results can be compared like for like.
+pub const METHODOLOGY_VERSION: &str = "1";
+
 pub mod bsm;
 pub mod error;
 pub mod exposure;

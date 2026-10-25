@@ -1,5 +1,8 @@
 # Conventions
 
+**Methodology version 1** (`gex_core::METHODOLOGY_VERSION`). The version is
+bumped whenever a change to these conventions can alter a computed number.
+
 This is the full statement of the units, signs and rules `gex-core` uses.
 The Python reference (`fixtures/reference/gex_reference.py`) follows the
 same rules, and the golden tests hold the two together.
@@ -124,7 +127,7 @@ where
 negligible_gex = 1e-9 · Σ_{iv > 0} |sign · OI · multiplier| · Γ(S = K) · K² · 0.01
 ```
 
-is a fraction (`NEGLIGIBLE_GEX_FRACTION`) of the sum of each contract's
+is a fraction (`NEGLIGIBLE_GEX_FRACTION = 1e-9`) of the sum of each contract's
 peak dollar gamma, taken with spot at its own strike. It doesn't depend on
 the grid.
 
