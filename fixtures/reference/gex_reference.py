@@ -240,7 +240,19 @@ def expiries(chain):
 
 
 def at_expiry(chain, e):
-    return [c for c in chain["contracts"] if abs(c["expiry"] - e) < EXPIRY_TOLERANCE]
+    """Contracts in the expiry group e falls in: the last representative r <= e
+    with e - r < tolerance, else the first above e within tolerance."""
+    reps = expiries(chain)
+    below = [i for i, r in enumerate(reps) if r <= e and e - r < EXPIRY_TOLERANCE]
+    above = [i for i, r in enumerate(reps) if r > e and r - e < EXPIRY_TOLERANCE]
+    if below:
+        i = below[-1]
+    elif above:
+        i = above[0]
+    else:
+        return []
+    end = reps[i + 1] if i + 1 < len(reps) else math.inf
+    return [c for c in chain["contracts"] if reps[i] <= c["expiry"] < end]
 
 
 def max_pain(chain, e):

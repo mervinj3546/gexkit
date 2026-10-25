@@ -275,8 +275,12 @@ impl Chain {
         &self.contracts
     }
 
-    /// Distinct expiries in ascending order, merging values within
-    /// [`EXPIRY_TOLERANCE`]. Each group is represented by its smallest value.
+    /// Distinct expiries in ascending order, one per expiry group.
+    ///
+    /// Sorted expiries join the current group while they are within
+    /// [`EXPIRY_TOLERANCE`] of its first (smallest) member, which represents
+    /// the group. The groups partition the chain: every contract belongs to
+    /// exactly one, and [`Chain::contracts_expiring`] returns it.
     #[must_use]
     pub fn expiries(&self) -> Vec<f64> {
         let mut all: Vec<f64> = self.contracts.iter().map(OptionContract::expiry).collect();
@@ -285,11 +289,38 @@ impl Chain {
         all
     }
 
-    /// Contracts whose expiry is within [`EXPIRY_TOLERANCE`] of `expiry`.
+    /// The contracts in the expiry group that `expiry` falls in: the group
+    /// whose representative `r` (see [`Chain::expiries`]) is the last one at
+    /// or below `expiry` with `expiry - r < EXPIRY_TOLERANCE`, or failing
+    /// that, the first one above `expiry` within the tolerance. Empty if
+    /// neither exists. So `contracts_expiring(c.expiry())` always contains
+    /// `c`, and any value from `expiries()` selects exactly its own group.
     pub fn contracts_expiring(&self, expiry: f64) -> impl Iterator<Item = &OptionContract> {
+        let bounds = self.expiry_group(expiry);
         self.contracts
             .iter()
-            .filter(move |c| (c.expiry - expiry).abs() < EXPIRY_TOLERANCE)
+            .filter(move |c| bounds.is_some_and(|(start, end)| start <= c.expiry && c.expiry < end))
+    }
+
+    /// `[start, end)` of the expiry group `expiry` falls in: `start` is the
+    /// group's representative and `end` the next group's (or infinity).
+    fn expiry_group(&self, expiry: f64) -> Option<(f64, f64)> {
+        let reps = self.expiries();
+        // Index of the first representative above `expiry`.
+        let above = reps.partition_point(|&r| r <= expiry);
+        let i = match above.checked_sub(1) {
+            Some(i) if expiry - reps.get(i)? < EXPIRY_TOLERANCE => i,
+            _ if reps
+                .get(above)
+                .is_some_and(|&r| r - expiry < EXPIRY_TOLERANCE) =>
+            {
+                above
+            }
+            _ => return None,
+        };
+        let start = *reps.get(i)?;
+        let end = reps.get(i + 1).copied().unwrap_or(f64::INFINITY);
+        Some((start, end))
     }
 }
 
@@ -464,6 +495,51 @@ mod tests {
         assert_eq!(ch.expiries(), vec![0.0, 0.1, 0.5]);
         assert_eq!(ch.contracts_expiring(0.1).count(), 2);
         assert_eq!(ch.contracts_expiring(0.3).count(), 0);
+    }
+
+    #[test]
+    fn expiry_groups_partition_the_chain() {
+        // Anchors at a and b = a + 1.5e-9. The contract at a + 0.8e-9 joins a
+        // (within 1e-9 of it) but is also within 1e-9 of b: the old symmetric
+        // window put it in both groups.
+        let a = 0.1;
+        let expiries = [a, a + 0.8e-9, a + 1.5e-9, a + 2.2e-9];
+        let ch = Chain::new(
+            100.0,
+            0.0,
+            0.0,
+            expiries.iter().map(|&e| call(100.0, e)).collect(),
+        )
+        .unwrap();
+        let reps = ch.expiries();
+        assert_eq!(reps, vec![a, a + 1.5e-9]);
+        let groups: Vec<Vec<f64>> = reps
+            .iter()
+            .map(|&r| {
+                ch.contracts_expiring(r)
+                    .map(OptionContract::expiry)
+                    .collect()
+            })
+            .collect();
+        assert_eq!(
+            groups,
+            vec![vec![a, a + 0.8e-9], vec![a + 1.5e-9, a + 2.2e-9]]
+        );
+        // Selecting with a contract's own expiry returns that contract's
+        // group, even when the next representative is nearer.
+        for c in ch.contracts() {
+            assert!(ch.contracts_expiring(c.expiry()).any(|x| x == c), "{c:?}");
+        }
+        let own = |e: f64| -> Vec<f64> {
+            ch.contracts_expiring(e)
+                .map(OptionContract::expiry)
+                .collect()
+        };
+        assert_eq!(own(a + 0.8e-9), vec![a, a + 0.8e-9]);
+        // Just below the first representative selects it; far away selects nothing.
+        assert_eq!(own(a - 0.5e-9), vec![a, a + 0.8e-9]);
+        assert_eq!(own(a - 2e-9), Vec::<f64>::new());
+        assert_eq!(own(a + 5e-9), Vec::<f64>::new());
     }
 
     #[cfg(feature = "serde")]

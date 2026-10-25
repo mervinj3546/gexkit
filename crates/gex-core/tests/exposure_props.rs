@@ -136,7 +136,40 @@ fn brute_force_pain(chain: &Chain, expiry: f64, p: f64) -> f64 {
         .sum()
 }
 
+/// Chains whose expiries cluster within a few `EXPIRY_TOLERANCE` of each
+/// other, where window-based grouping would put contracts in two groups.
+fn clustered_expiry_chain() -> impl Strategy<Value = Chain> {
+    let base = prop::sample::select(vec![0.05, 0.1, 0.25]);
+    prop::collection::vec((0_u32..8, base), 1..30).prop_map(|legs| {
+        let cs = legs
+            .into_iter()
+            .map(|(step, base)| {
+                let expiry = base + f64::from(step) * 0.4e-9;
+                OptionContract::new(OptionKind::Call, 100.0, expiry, 0.2, 1).expect("valid")
+            })
+            .collect();
+        Chain::new(100.0, 0.0, 0.0, cs).expect("valid")
+    })
+}
+
 proptest! {
+    #[test]
+    fn expiry_groups_partition_the_chain(ch in prop_oneof![chain(), clustered_expiry_chain()]) {
+        // Every contract lands in exactly one group of expiries(), and
+        // selecting with its own expiry returns that group.
+        let mut seen = vec![0_usize; ch.contracts().len()];
+        for e in ch.expiries() {
+            for c in ch.contracts_expiring(e) {
+                let i = ch.contracts().iter().position(|x| std::ptr::eq(x, c)).expect("member");
+                seen[i] += 1;
+            }
+        }
+        prop_assert!(seen.iter().all(|&n| n == 1), "group counts {seen:?}");
+        for c in ch.contracts() {
+            prop_assert!(ch.contracts_expiring(c.expiry()).any(|x| std::ptr::eq(x, c)));
+        }
+    }
+
     #[test]
     fn input_order_does_not_matter((a, b) in chain_and_shuffled()) {
         // Canonical ordering makes results bit-identical, not just close.

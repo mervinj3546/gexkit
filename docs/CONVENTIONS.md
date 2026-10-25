@@ -15,9 +15,13 @@ same rules, and the golden tests hold the two together.
 | `open_interest`, `volume` | contracts | `u64` |
 | `multiplier` | units per contract | on `Chain`, default 100 |
 
-Contracts whose expiries differ by less than `EXPIRY_TOLERANCE = 1e-9`
-years (about 0.03 s) are the same expiry. `Chain::expiries()` represents
-each group by its smallest value.
+**Expiry groups.** Expiries are grouped with `EXPIRY_TOLERANCE = 1e-9`
+years (about 0.03 s). Sorted expiries join the current group while they are
+within the tolerance of its first (smallest) member, which represents the
+group in `Chain::expiries()`. The groups partition the chain: each contract
+is in exactly one. `Chain::contracts_expiring(e)` returns the group `e` falls
+in: the last representative `r <= e` with `e - r < 1e-9`, or failing that the
+first representative above `e` within `1e-9`. It is empty if neither exists.
 
 ## Pricing model
 
