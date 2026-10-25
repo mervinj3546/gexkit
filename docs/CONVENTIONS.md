@@ -80,7 +80,12 @@ Each contract contributes `w = sign · OI · multiplier` times a greek:
   report, so the count is never lost; `GexError::EmptyChain` means the chain
   has no contracts at all.
 - **Per strike.** Rows sum every expiry at a strike and come back in
-  ascending strike order.
+  ascending strike order. Strikes are grouped with the relative tolerance
+  `STRIKE_TOLERANCE = 1e-9`: sorted strikes join a group while
+  `strike − first < 1e-9 · first`, where `first` is the group's smallest
+  strike, which labels the row. So 450.0 and 450.000000000001 are one row
+  and 450.0 and 450.001 are two. Max pain candidates and the expected-move
+  straddle strike use the same groups (within the chosen expiry).
 - **Determinism.** Contracts are sorted into a canonical order over every
   field before summing or picking, so results are bit-identical whatever
   the input order.

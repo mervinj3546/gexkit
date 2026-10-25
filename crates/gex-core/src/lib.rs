@@ -38,7 +38,7 @@ pub use exposure::{
 };
 pub use levels::{ExpectedMove, PriceSource, Walls, expected_move, max_pain, walls};
 pub use math::{erfc, norm_cdf, norm_pdf};
-pub use types::{Chain, EXPIRY_TOLERANCE, OptionContract, OptionKind};
+pub use types::{Chain, EXPIRY_TOLERANCE, OptionContract, OptionKind, STRIKE_TOLERANCE};
 
 /// Compiles and runs the README's code blocks as doctests.
 #[cfg(doctest)]

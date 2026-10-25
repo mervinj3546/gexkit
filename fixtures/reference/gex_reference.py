@@ -37,6 +37,18 @@ ROOT_TOL = 1e-12
 ROOT_MAX_STEPS = 500
 EXPIRY_TOLERANCE = 1e-9
 TIE_TOLERANCE = 1e-12
+STRIKE_TOLERANCE = 1e-9
+
+
+def strike_rep(strikes):
+    """Map each strike to its group's smallest strike: sorted strikes join a
+    group while strike - first < STRIKE_TOLERANCE * first."""
+    rep, first = {}, None
+    for k in sorted(set(strikes)):
+        if first is None or not (k - first < STRIKE_TOLERANCE * abs(first)):
+            first = k
+        rep[k] = first
+    return rep
 
 
 def norm_cdf(x):
@@ -126,10 +138,12 @@ def per_strike(chain):
     spot, mult = chain["spot"], chain["multiplier"]
     rows = {}
     keys = ("call_gex", "put_gex", "gex", "dex", "vanna", "charm")
+    rep = strike_rep(c["strike"] for c in chain["contracts"])
     for c in chain["contracts"]:
+        k_row = rep[c["strike"]]
         row = rows.setdefault(
-            c["strike"],
-            dict(strike=c["strike"], call_oi=0, put_oi=0,
+            k_row,
+            dict(strike=k_row, call_oi=0, put_oi=0,
                  **{k: 0.0 for k in keys}, **{k + "_abs": 0.0 for k in keys}),
         )
         row["call_oi" if c["kind"] == "call" else "put_oi"] += c["open_interest"]
@@ -257,7 +271,7 @@ def at_expiry(chain, e):
 
 def max_pain(chain, e):
     cs = at_expiry(chain, e)
-    strikes = sorted({c["strike"] for c in cs})
+    strikes = sorted(set(strike_rep(c["strike"] for c in cs).values()))
 
     def pain(p):
         total = 0.0
@@ -280,8 +294,9 @@ def mid(c):
 
 def expected_move(chain, e):
     cs = at_expiry(chain, e)
-    calls = {c["strike"]: c for c in sorted(cs, key=canonical, reverse=True) if c["kind"] == "call"}
-    puts = {c["strike"]: c for c in sorted(cs, key=canonical, reverse=True) if c["kind"] == "put"}
+    rep = strike_rep(c["strike"] for c in cs)
+    calls = {rep[c["strike"]]: c for c in sorted(cs, key=canonical, reverse=True) if c["kind"] == "call"}
+    puts = {rep[c["strike"]]: c for c in sorted(cs, key=canonical, reverse=True) if c["kind"] == "put"}
     both = sorted(set(calls) & set(puts))
     if not both:
         return dict(error="NoStraddle")

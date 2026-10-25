@@ -19,7 +19,7 @@ pub use flip::{NEGLIGIBLE_GEX_FRACTION, ZeroGamma, negligible_gex, zero_gamma};
 use crate::bsm::{self, BsmInput};
 use crate::error::{GexError, Result};
 use crate::levels::{Walls, walls};
-use crate::types::{Chain, OptionContract, OptionKind};
+use crate::types::{Chain, OptionContract, OptionKind, strike_groups};
 
 /// One percent, the move size GEX and vanna exposure are quoted for.
 const PER_PCT: f64 = 0.01;
@@ -274,15 +274,16 @@ fn per_strike_prepared(
     prep: &Prepared<'_>,
     cfg: &ExposureConfig,
 ) -> Vec<StrikeExposure> {
-    // `all` is in canonical order, so each strike's contracts are adjacent.
-    prep.all
-        .chunk_by(|a, b| same_strike(a.strike(), b.strike()))
+    // `all` is in canonical order (strike first), so each strike group's
+    // contracts are adjacent.
+    strike_groups(&prep.all)
+        .into_iter()
         .filter_map(|group| strike_row(chain, group, cfg))
         .collect()
 }
 
-/// Sums one strike's contracts into a row; `None` only for an empty group,
-/// which `chunk_by` never produces.
+/// Sums one strike group into a row labelled with the group's smallest
+/// strike; `None` only for an empty group, which `strike_groups` never makes.
 fn strike_row(
     chain: &Chain,
     group: &[&OptionContract],
@@ -314,11 +315,6 @@ fn strike_row(
         row.charm += w * g.charm * spot / DAYS_PER_YEAR;
     }
     Some(row)
-}
-
-/// Whether two strikes share a per-strike row.
-fn same_strike(a: f64, b: f64) -> bool {
-    a.total_cmp(&b).is_eq()
 }
 
 /// Contracts the engine can price: those with a positive IV.
@@ -598,6 +594,33 @@ mod tests {
         };
         assert_eq!(at(gex.abs()), Regime::Neutral, "|GEX| == band is neutral");
         assert_ne!(at(gex.abs() * (1.0 - 1e-12)), Regime::Neutral);
+    }
+
+    #[test]
+    fn near_identical_strikes_share_a_row_level_and_straddle() {
+        // 450.000000000001 differs from 450.0 by about 2e-15 relative: one
+        // strike. 450.001 differs by about 2e-6: a separate strike.
+        let near = 450.000_000_000_001;
+        let chain = Chain::new(
+            450.2,
+            0.0,
+            0.0,
+            vec![
+                contract(OptionKind::Call, 450.0, 0.1, 0.2, 10),
+                contract(OptionKind::Put, near, 0.1, 0.2, 20),
+                contract(OptionKind::Call, 450.001, 0.1, 0.2, 5),
+            ],
+        )
+        .unwrap();
+        let rows = per_strike(&chain, &ExposureConfig::default());
+        let strikes: Vec<f64> = rows.iter().map(|r| r.strike).collect();
+        assert_eq!(strikes, vec![450.0, 450.001]);
+        assert_eq!((rows[0].call_oi, rows[0].put_oi), (10, 20));
+        // The straddle pairs the 450.0 call with the 450.000000000001 put.
+        let em = crate::levels::expected_move(&chain, 0.1).unwrap();
+        assert_eq!(em.strike, 450.0);
+        let mp = crate::levels::max_pain(&chain, 0.1).unwrap();
+        assert!(mp == 450.0 || mp == 450.001, "{mp}");
     }
 
     #[test]

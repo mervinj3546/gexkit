@@ -9,6 +9,39 @@ use crate::error::{GexError, Result};
 /// are treated as the same expiry.
 pub const EXPIRY_TOLERANCE: f64 = 1e-9;
 
+/// Relative tolerance for treating strikes as the same: sorted strikes join a
+/// group while `strike - first < STRIKE_TOLERANCE * first`, where `first` is
+/// the group's smallest strike, which represents it. 450.0 and
+/// 450.000000000001 are one strike; 450.0 and 450.001 are two.
+pub const STRIKE_TOLERANCE: f64 = 1e-9;
+
+/// Whether `strike` joins the strike group whose smallest strike is `first`.
+pub(crate) fn joins_strike_group(first: f64, strike: f64) -> bool {
+    strike - first < STRIKE_TOLERANCE * first.abs()
+}
+
+/// Splits contracts sorted by strike into strike groups (see
+/// [`STRIKE_TOLERANCE`]). Each group is non-empty and starts with its
+/// representative strike.
+pub(crate) fn strike_groups<'a, 'c>(
+    sorted: &'a [&'c OptionContract],
+) -> Vec<&'a [&'c OptionContract]> {
+    let mut groups = Vec::new();
+    let mut rest = sorted;
+    while let Some(first) = rest.first() {
+        let anchor = first.strike();
+        let len = rest
+            .iter()
+            .take_while(|c| joins_strike_group(anchor, c.strike()))
+            .count()
+            .max(1);
+        let (group, tail) = rest.split_at(len.min(rest.len()));
+        groups.push(group);
+        rest = tail;
+    }
+    groups
+}
+
 /// Call or put.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

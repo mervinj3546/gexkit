@@ -7,7 +7,7 @@
 use crate::bsm::{self, BsmInput};
 use crate::error::{GexError, Result};
 use crate::exposure::StrikeExposure;
-use crate::types::{Chain, OptionContract, OptionKind};
+use crate::types::{Chain, OptionContract, OptionKind, joins_strike_group, strike_groups};
 
 /// Relative difference below which two max pain values are treated as equal.
 pub const TIE_TOLERANCE: f64 = 1e-12;
@@ -113,8 +113,8 @@ pub fn expected_move(chain: &Chain, expiry: f64) -> Result<ExpectedMove> {
     // first call and first put at a strike the same every time.
     contracts.sort_by(|a, b| OptionContract::canonical_cmp(a, b));
     let spot = chain.spot();
-    let (strike, call, put) = contracts
-        .chunk_by(|a, b| a.strike().total_cmp(&b.strike()).is_eq())
+    let (strike, call, put) = strike_groups(&contracts)
+        .into_iter()
         .filter_map(|group| {
             let first = |kind| group.iter().copied().find(|c| c.kind() == kind);
             Some((
@@ -174,7 +174,8 @@ fn leg_price(chain: &Chain, c: &OptionContract) -> (f64, PriceSource) {
 fn distinct_strikes(contracts: &[&OptionContract]) -> Vec<f64> {
     let mut strikes: Vec<f64> = contracts.iter().map(|c| c.strike()).collect();
     strikes.sort_by(f64::total_cmp);
-    strikes.dedup_by(|a, b| a.total_cmp(b).is_eq());
+    // Keep each strike group's smallest strike (see STRIKE_TOLERANCE).
+    strikes.dedup_by(|later, first| joins_strike_group(*first, *later));
     strikes
 }
 

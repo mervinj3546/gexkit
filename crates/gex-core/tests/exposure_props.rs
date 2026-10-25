@@ -1,8 +1,8 @@
 //! Property tests for the exposure engine and levels on random chains.
 
 use gex_core::{
-    Chain, ExposureConfig, ExposureReport, OptionContract, OptionKind, analyze, expected_move,
-    max_pain, negligible_gex, total_gex_at,
+    Chain, ExposureConfig, ExposureReport, OptionContract, OptionKind, STRIKE_TOLERANCE, analyze,
+    expected_move, max_pain, negligible_gex, per_strike, total_gex_at,
 };
 use proptest::prelude::*;
 
@@ -152,7 +152,46 @@ fn clustered_expiry_chain() -> impl Strategy<Value = Chain> {
     })
 }
 
+/// Chains with strikes packed within a few `STRIKE_TOLERANCE` of each other.
+fn clustered_strike_chain() -> impl Strategy<Value = Chain> {
+    let base = prop::sample::select(vec![95.0, 100.0, 450.0]);
+    let leg = (
+        prop_oneof![Just(OptionKind::Call), Just(OptionKind::Put)],
+        base,
+        0_u32..6,
+        1..1_000_u64,
+    );
+    prop::collection::vec(leg, 1..30).prop_map(|legs| {
+        let cs = legs
+            .into_iter()
+            .map(|(kind, base, step, oi)| {
+                // Steps of 0.4 tolerances: some pairs merge, chains could drift.
+                let strike = base * (1.0 + f64::from(step) * 0.4 * STRIKE_TOLERANCE);
+                OptionContract::new(kind, strike, 0.05, 0.2, oi).expect("valid")
+            })
+            .collect();
+        Chain::new(100.0, 0.0, 0.0, cs).expect("valid")
+    })
+}
+
 proptest! {
+    #[test]
+    fn strike_rows_are_tolerance_groups(ch in prop_oneof![chain(), clustered_strike_chain()]) {
+        let rows = per_strike(&ch, &ExposureConfig::default());
+        // Every contract is within tolerance of its row's strike, and
+        // consecutive rows are at least the tolerance apart.
+        for c in ch.contracts() {
+            let row = rows.iter().rev().find(|r| r.strike <= c.strike()).expect("row");
+            prop_assert!(c.strike() - row.strike < STRIKE_TOLERANCE * row.strike);
+        }
+        for w in rows.windows(2) {
+            prop_assert!(w[1].strike - w[0].strike >= STRIKE_TOLERANCE * w[0].strike, "{w:?}");
+        }
+        let oi = |k: OptionKind| ch.contracts().iter().filter(|c| c.kind() == k).map(OptionContract::open_interest).sum::<u64>();
+        prop_assert_eq!(rows.iter().map(|r| r.call_oi).sum::<u64>(), oi(OptionKind::Call));
+        prop_assert_eq!(rows.iter().map(|r| r.put_oi).sum::<u64>(), oi(OptionKind::Put));
+    }
+
     #[test]
     fn expiry_groups_partition_the_chain(ch in prop_oneof![chain(), clustered_expiry_chain()]) {
         // Every contract lands in exactly one group of expiries(), and
