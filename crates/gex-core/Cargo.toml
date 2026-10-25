@@ -1,0 +1,13 @@
+[package]
+name = "gex-core"
+description = "Options dealer-exposure analytics: Black-Scholes-Merton greeks, GEX/DEX/vanna/charm by strike, zero-gamma flip, walls, max pain and expected move"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
