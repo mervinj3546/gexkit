@@ -457,6 +457,107 @@ mod tests {
         assert!(rel_eq(total_gex_at(&chain, 100.0, &cfg), r.total_gex));
     }
 
+    /// A chain with both signs of GEX and a flip, for the config tests.
+    fn mixed_chain() -> Chain {
+        Chain::new(
+            100.0,
+            0.02,
+            0.01,
+            vec![
+                contract(OptionKind::Put, 95.0, 0.05, 0.25, 4_000),
+                contract(OptionKind::Call, 100.0, 0.05, 0.2, 1_500),
+                contract(OptionKind::Put, 100.0, 0.05, 0.21, 1_000),
+                contract(OptionKind::Call, 106.0, 0.05, 0.18, 3_000),
+            ],
+        )
+        .unwrap()
+    }
+
+    fn totals(r: &ExposureReport) -> [f64; 4] {
+        [r.total_gex, r.total_dex, r.total_vanna, r.total_charm]
+    }
+
+    #[test]
+    fn multiplier_scales_every_exposure() {
+        let cfg = ExposureConfig::default();
+        let base = analyze(&mixed_chain(), &cfg).unwrap();
+        let tenth = analyze(&mixed_chain().with_multiplier(10.0).unwrap(), &cfg).unwrap();
+        for (a, b) in totals(&base).into_iter().zip(totals(&tenth)) {
+            assert!(rel_eq(b * 10.0, a), "{b} * 10 vs {a}");
+        }
+        for (a, b) in base.per_strike.iter().zip(&tenth.per_strike) {
+            assert!(
+                rel_eq(b.gex * 10.0, a.gex),
+                "{} {} vs {}",
+                a.strike,
+                b.gex,
+                a.gex
+            );
+        }
+        // Levels are scale-free.
+        assert_eq!(tenth.walls, base.walls);
+        let (z0, z1) = (base.zero_gamma.unwrap(), tenth.zero_gamma.unwrap());
+        assert!((z0.level - z1.level).abs() < 1e-8, "{z0:?} vs {z1:?}");
+    }
+
+    #[test]
+    fn dealer_signs_are_applied_per_kind() {
+        let chain = mixed_chain();
+        let base = analyze(&chain, &ExposureConfig::default()).unwrap();
+        // Dealers short calls and long puts: every exposure flips sign exactly.
+        let swapped_cfg = ExposureConfig {
+            call_sign: -1.0,
+            put_sign: 1.0,
+            ..ExposureConfig::default()
+        };
+        let swapped = analyze(&chain, &swapped_cfg).unwrap();
+        assert_eq!(totals(&swapped), totals(&base).map(|x| -x));
+        assert_ne!(swapped.regime, base.regime);
+        for (a, b) in base.per_strike.iter().zip(&swapped.per_strike) {
+            assert_eq!(
+                (b.call_gex, b.put_gex),
+                (-a.call_gex, -a.put_gex),
+                "strike {}",
+                a.strike
+            );
+        }
+        // Long both: GEX is the sum of the magnitudes of each side.
+        let long_cfg = ExposureConfig {
+            call_sign: 1.0,
+            put_sign: 1.0,
+            ..ExposureConfig::default()
+        };
+        let long = analyze(&chain, &long_cfg).unwrap();
+        let magnitudes: f64 = base
+            .per_strike
+            .iter()
+            .map(|s| s.call_gex.abs() + s.put_gex.abs())
+            .sum();
+        assert!(rel_eq(long.total_gex, magnitudes));
+        assert_eq!(long.zero_gamma, None, "all-positive GEX has no flip");
+    }
+
+    #[test]
+    fn neutral_band_is_inclusive() {
+        let chain = mixed_chain();
+        let gex = analyze(&chain, &ExposureConfig::default())
+            .unwrap()
+            .total_gex;
+        let at = |band: f64| {
+            analyze(
+                &chain,
+                &ExposureConfig {
+                    neutral_band: band,
+                    ..ExposureConfig::default()
+                },
+            )
+            .unwrap()
+            .regime
+        };
+        assert_eq!(at(gex.abs()), Regime::Neutral, "|GEX| == band is neutral");
+        assert_ne!(at(gex.abs() * (1.0 - 1e-12)), Regime::Neutral);
+    }
+
     #[test]
     fn config_validation() {
         let base = ExposureConfig::default();
