@@ -20,8 +20,10 @@ crates/gex-core/          core library (types, BSM greeks, exposure engine, leve
   src/bsm.rs              Black-Scholes-Merton price and greeks
   src/exposure/           per-strike exposure, totals, regime, zero-gamma flip
   src/levels.rs           walls, max pain, expected move
-  tests/                  golden.rs (vs Python reference), props.rs (proptest)
-  benches/chain.rs        criterion, ~3,000-contract 0DTE chain
+  tests/golden.rs         vs Python reference (needs the `serde` feature)
+  tests/bsm_props.rs      proptest invariants for the greeks
+  tests/exposure_props.rs proptest invariants for the engine and levels
+  benches/chain.rs        criterion, 3,002-contract 0DTE chain
 fixtures/gen/             gex-fixtures: seeded synthetic chain generator (lib + bin)
 fixtures/reference/       gex_reference.py — stdlib-only Python reference
 fixtures/golden/          committed *.chain.json inputs and *.expected.json outputs
@@ -33,6 +35,7 @@ docs/CONVENTIONS.md       full statement of units and sign conventions
 ```
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy -p gex-core --lib -- -D warnings   # no features; dev-deps would enable serde
 cargo test --workspace --all-features
 cargo bench --workspace --no-run
 ```
@@ -55,6 +58,14 @@ py -3 -I fixtures/reference/gex_reference.py fixtures/golden
   summing; break ties by distance to spot, then lower strike.
 - Never change a golden file to make a test pass without explaining why the
   convention or fixture changed.
+- Commit `*.proptest-regressions` files; proptest replays them first.
+- Stress property tests before trusting a tolerance:
+  `PROPTEST_CASES=20000 cargo test --release -p gex-core --test <name>`.
+- Totals with cancelling terms need tolerances scaled by the sum of absolute
+  contributions, not by the result (see `*_abs` in the expected JSON).
+- serde_json uses `float_roundtrip`; without it parsed floats can be 1 ulp off.
+- The Python reference must stay stdlib-only and written from textbook
+  formulas, not ported from the Rust code.
 
 ## Conventions (authoritative summary; details in docs/CONVENTIONS.md)
 
